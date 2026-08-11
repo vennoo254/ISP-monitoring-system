@@ -1,8 +1,23 @@
 version: '3.8'
 
 services:
+  reverse-proxy:
+    image: nginx:stable-alpine
+    ports:
+      - 80:80
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+      - prometheus
+      - grafana
+    networks:
+      - monitoring
+
   prometheus:
     image: prom/prometheus:latest
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--web.route-prefix=/prometheus", "--web.external-url=/prometheus"]
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
@@ -14,6 +29,8 @@ services:
     image: grafana/grafana:latest
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SERVER_ROOT_URL=http://localhost/grafana
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
     ports:
       - 3000:3000
     depends_on:
