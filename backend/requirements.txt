@@ -3,3 +3,5 @@ uvicorn==0.22.0
 SQLAlchemy==2.0.19
 psycopg2-binary==2.9.7
 pydantic==1.10.9
+starlette-prometheus==0.7.0
+prometheus-client==0.16.0

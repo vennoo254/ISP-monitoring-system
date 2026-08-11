@@ -1,0 +1,20 @@
+groups:
+  - name: network_alerts
+    rules:
+      - alert: HighPacketLoss
+        expr: ping_packet_loss_percent > 50
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High packet loss for {{ $labels.target }}"
+          description: "Packet loss is {{ $value }}% for target {{ $labels.target }}"
+
+      - alert: HighLatency
+        expr: ping_latency_seconds > 0.5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency for {{ $labels.target }}"
+          description: "Ping latency is {{ $value }} seconds for target {{ $labels.target }}"

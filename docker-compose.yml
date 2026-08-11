@@ -20,8 +20,19 @@ services:
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--web.route-prefix=/prometheus", "--web.external-url=/prometheus"]
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules
     ports:
       - 9090:9090
+    networks:
+      - monitoring
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    volumes:
+      - ./alertmanager/config.yml:/etc/alertmanager/config.yml:ro
+    command: ["--config.file=/etc/alertmanager/config.yml"]
+    ports:
+      - 9093:9093
     networks:
       - monitoring
 

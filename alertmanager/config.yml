@@ -1,0 +1,15 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: 'ops-team'
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 3h
+
+receivers:
+  - name: 'ops-team'
+    # For testing, we add a webhook receiver that doesn't have to exist. You can replace this with email/slack configs.
+    webhook_configs:
+      - url: 'http://localhost:5001/'
+        send_resolved: true
