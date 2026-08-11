@@ -1,0 +1,38 @@
+{
+  "id": null,
+  "uid": "isp-latency",
+  "title": "ISP Latency & Loss",
+  "tags": ["network","ping"],
+  "timezone": "browser",
+  "schemaVersion": 27,
+  "version": 1,
+  "refresh": "15s",
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Ping latency (seconds)",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "id": 1,
+      "targets": [
+        {
+          "expr": "ping_latency_seconds",
+          "legendFormat": "{{target}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Packet loss (%)",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "id": 2,
+      "targets": [
+        {
+          "expr": "ping_packet_loss_percent",
+          "legendFormat": "{{target}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

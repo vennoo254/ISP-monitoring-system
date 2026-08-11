@@ -18,6 +18,10 @@ services:
       - 3000:3000
     depends_on:
       - prometheus
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana-storage:/var/lib/grafana
     networks:
       - monitoring
 
@@ -60,6 +64,8 @@ services:
     build: ./exporters/ping_exporter
     environment:
       - TARGETS=8.8.8.8,1.1.1.1
+    cap_add:
+      - NET_RAW
     ports:
       - 9115:9115
     networks:
@@ -74,6 +80,7 @@ services:
 
 volumes:
   pgdata:
+  grafana-storage:
 
 networks:
   monitoring:
