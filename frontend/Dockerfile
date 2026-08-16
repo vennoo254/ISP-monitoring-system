@@ -2,7 +2,7 @@
 FROM node:18-alpine as build
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci --silent
+RUN npm install --prefer-offline --no-audit
 COPY . .
 RUN npm run build
 
