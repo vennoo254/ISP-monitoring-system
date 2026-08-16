@@ -4,7 +4,9 @@ from rest_framework import status
 from django.conf import settings
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
+from influxdb_client.client.query_api import QueryApi
 from .alerts import evaluate_alerts
+from .models import Probe
 import jwt
 
 class MetricsView(APIView):
@@ -15,18 +17,30 @@ class MetricsView(APIView):
         # Simple auth: X-API-KEY or Bearer JWT
         api_key = request.headers.get('X-API-KEY')
         auth = request.headers.get('Authorization')
-        if api_key != settings.PROBE_API_KEY:
+        authorized = False
+        # Check DB-backed Probe keys first
+        if api_key:
+            try:
+                if Probe.objects.filter(api_key=api_key).exists():
+                    authorized = True
+            except Exception:
+                # DB may not be ready in some environments; fall back
+                pass
+        # fallback to legacy setting
+        if not authorized and api_key == settings.PROBE_API_KEY:
+            authorized = True
+        if not authorized:
             if auth and auth.startswith('Bearer '):
                 token = auth.split(' ', 1)[1]
                 try:
                     jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+                    authorized = True
                 except Exception:
-                    return Response({'detail': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
-            else:
-                return Response({'detail': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
+                    authorized = False
+        if not authorized:
+            return Response({'detail': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
 
         payload = request.data
-        # Validate minimal fields
         target = payload.get('target') or payload.get('target_ip')
         timestamp = payload.get('timestamp')
         if not target or not timestamp:
@@ -49,11 +63,37 @@ class MetricsView(APIView):
         except Exception as e:
             return Response({'detail': 'failed to write metrics', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # Evaluate alerts asynchronously / sync simple
+        # Evaluate alerts (now backed by DB rules)
         try:
             evaluate_alerts(payload)
         except Exception:
-            # don't fail the request due to alert delivery
             pass
 
         return Response({'status': 'ok'})
+
+
+class HistoryView(APIView):
+    """GET /api/history?target=8.8.8.8&metric=latency_ms&range=1h
+    Returns JSON timeseries points [{time: iso, value: float}, ...]
+    """
+    def get(self, request):
+        target = request.query_params.get('target')
+        metric = request.query_params.get('metric')
+        rng = request.query_params.get('range', '1h')
+        if not target or not metric:
+            return Response({'detail': 'target and metric are required'}, status=status.HTTP_400_BAD_REQUEST)
+        # Map metric to field name used in Influx (same)
+        field = metric
+        flux = f'from(bucket:"{settings.INFLUX_BUCKET}") |> range(start: -{rng}) |> filter(fn: (r) => r._measurement == "probe_metrics" and r.target == "{target}" and r._field == "{field}") |> aggregateWindow(every: 1m, fn: mean) |> yield()'
+        try:
+            client = InfluxDBClient(url=settings.INFLUX_URL, token=settings.INFLUX_TOKEN, org=settings.INFLUX_ORG)
+            query_api = client.query_api()
+            tables = query_api.query(flux)
+            pts = []
+            for table in tables:
+                for record in table.records:
+                    pts.append({'time': record.get_time().isoformat(), 'value': record.get_value()})
+            pts.sort(key=lambda x: x['time'])
+            return Response({'points': pts})
+        except Exception as e:
+            return Response({'detail': 'failed to query influx', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
