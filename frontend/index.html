@@ -1,43 +1,154 @@
 <!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ISP Monitor</title>
-  </head>
-  <body>
-    <div id="app">
-      <h1>ISP Monitoring - Targets</h1>
-      <form id="addForm">
-        <input id="name" placeholder="name" />
-        <input id="address" placeholder="address (IP or host)" required />
-        <button>Add target</button>
-      </form>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ISP Monitoring — Sample UI</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 16px; background: #f5f7fa; }
+    header { display:flex; align-items:center; gap:12px; }
+    h1 { margin: 0; font-size: 20px; }
+    .row { display:flex; gap: 16px; margin-top: 16px; }
+    .col { background: white; border-radius: 8px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .col.small { flex: 0 0 320px; }
+    .col.flex { flex: 1 1 auto; }
+    #targets { list-style:none; padding:0; margin:0; }
+    #targets li { padding:8px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; }
+    .status-dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:8px; }
+    .status-ok { background: #22c55e; }
+    .status-warn { background: #f59e0b; }
+    .status-critical { background: #ef4444; }
+    #alerts { max-height: 300px; overflow:auto; }
+    .alert { padding:8px; border-bottom:1px solid #eee; }
+    .chart-wrap { height:220px; }
+    footer { margin-top: 20px; color:#666 }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ISP Monitoring — Sample UI</h1>
+    <div style="margin-left:auto; color:#666">Demo page — connects to WebSocket alerts</div>
+  </header>
+
+  <div class="row">
+    <div class="col small">
+      <h3>Monitored Targets</h3>
       <ul id="targets"></ul>
     </div>
-    <script>
-      const api = '/api/targets'
-      async function load(){
-        const res = await fetch(api)
-        const list = await res.json()
-        const ul = document.getElementById('targets')
-        ul.innerHTML = ''
-        list.forEach(t=>{
-          const li = document.createElement('li')
-          li.textContent = `${t.id} - ${t.name || '-'} - ${t.address}`
-          ul.appendChild(li)
-        })
-      }
-      document.getElementById('addForm').addEventListener('submit', async (e)=>{
-        e.preventDefault()
-        const name = document.getElementById('name').value
-        const address = document.getElementById('address').value
-        await fetch(api, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, address})})
-        document.getElementById('name').value=''
-        document.getElementById('address').value=''
-        load()
-      })
-      load()
-    </script>
-  </body>
+
+    <div class="col flex">
+      <h3>Realtime Metrics (sample)</h3>
+      <div style="display:flex; gap:12px;">
+        <div style="flex:1">
+          <div class="chart-wrap"><canvas id="latencyChart"></canvas></div>
+        </div>
+        <div style="flex:1">
+          <div class="chart-wrap"><canvas id="packetChart"></canvas></div>
+        </div>
+        <div style="flex:1">
+          <div class="chart-wrap"><canvas id="jitterChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col small">
+      <h3>Alerts</h3>
+      <div id="alerts"></div>
+    </div>
+  </div>
+
+  <footer>
+    To test alerts: POST a sample alert to the node notifier: POST http://localhost:4000/alert with JSON {"target":"8.8.8.8","metric":"latency","value":250}
+  </footer>
+
+  <script>
+    // Sample targets
+    const targets = [
+      { target: '8.8.8.8', probe_host: 'probe-1', status: 'ok' },
+      { target: '1.1.1.1', probe_host: 'probe-2', status: 'ok' },
+      { target: '192.168.1.1', probe_host: 'office-router', status: 'warn' }
+    ];
+
+    const targetsEl = document.getElementById('targets');
+    function renderTargets() {
+      targetsEl.innerHTML = '';
+      targets.forEach(t => {
+        const li = document.createElement('li');
+        const left = document.createElement('div');
+        const dot = document.createElement('span');
+        dot.className = 'status-dot ' + (t.status === 'ok' ? 'status-ok' : (t.status === 'warn' ? 'status-warn' : 'status-critical'));
+        left.appendChild(dot);
+        left.appendChild(document.createTextNode(t.target + ' '));
+        left.appendChild(document.createElement('small')).textContent = ' (' + t.probe_host + ')';
+        li.appendChild(left);
+        const right = document.createElement('div');
+        right.innerHTML = '<small>avg 23ms</small>';
+        li.appendChild(right);
+        targetsEl.appendChild(li);
+      });
+    }
+    renderTargets();
+
+    // Setup charts
+    function makeChart(ctx, label, color) {
+      return new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: Array.from({length:20}, (_,i)=>i-19),
+          datasets: [{ label, data: Array.from({length:20}, ()=>Math.random()*50 + 10), borderColor: color, backgroundColor: 'transparent', tension:0.3 }]
+        },
+        options: { animation:false, scales:{ x:{ display:false } }, plugins:{ legend:{ display:false } } }
+      });
+    }
+
+    const latencyChart = makeChart(document.getElementById('latencyChart').getContext('2d'), 'Latency (ms)', '#2563eb');
+    const packetChart = makeChart(document.getElementById('packetChart').getContext('2d'), 'Packet loss (%)', '#ef4444');
+    const jitterChart = makeChart(document.getElementById('jitterChart').getContext('2d'), 'Jitter (ms)', '#f59e0b');
+
+    function shiftAndPush(chart, value) {
+      chart.data.datasets[0].data.push(value);
+      chart.data.datasets[0].data.shift();
+      chart.update();
+    }
+
+    // Periodically update charts with random-ish values (simulates incoming metrics)
+    setInterval(()=>{
+      shiftAndPush(latencyChart, Math.max(5, Math.round((Math.random()*40 + 10) * (Math.random()<0.05?5:1))));
+      shiftAndPush(packetChart, Math.round(Math.random()*3 * (Math.random()<0.03?10:1)));
+      shiftAndPush(jitterChart, Math.round(Math.random()*10));
+    }, 3000);
+
+    // Alerts list and websocket connection to node notifier
+    const alertsEl = document.getElementById('alerts');
+    function addAlert(alert) {
+      const div = document.createElement('div');
+      div.className = 'alert';
+      const ts = new Date().toLocaleTimeString();
+      div.innerHTML = `<strong>${alert.metric}</strong> on <em>${alert.target}</em> <br/> value: ${alert.value} <br/><small>${ts}</small>`;
+      alertsEl.prepend(div);
+      // mark target as warn/critical
+      const t = targets.find(x=>x.target === alert.target);
+      if (t) t.status = 'warn'; renderTargets();
+    }
+
+    // connect to websocket
+    const wsUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + (location.hostname || 'localhost') + ':4000/';
+    let ws;
+    try {
+      ws = new WebSocket(wsUrl);
+      ws.onopen = () => console.log('ws open', wsUrl);
+      ws.onmessage = (e) => {
+        try { const a = JSON.parse(e.data); addAlert(a); } catch(e){ console.error('bad alert', e); }
+      };
+      ws.onclose = ()=> console.log('ws closed');
+      ws.onerror = (e)=> console.error('ws error', e);
+    } catch(e) {
+      console.warn('WebSocket not available', e);
+    }
+
+    // Provide a small helper to simulate an alert locally
+    window._simulateAlert = (t='8.8.8.8', m='latency', v=220) => addAlert({target:t, metric:m, value:v});
+  </script>
+</body>
 </html>
