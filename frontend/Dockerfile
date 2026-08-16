@@ -1,8 +1,8 @@
 # Minimal frontend built with plain HTML/JS and served by nginx
 FROM node:18-alpine as build
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm install --prefer-offline --no-audit
+COPY package.json ./
+RUN npm install --no-save
 COPY . .
 RUN npm run build
 
