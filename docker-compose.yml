@@ -1,115 +1,46 @@
 version: '3.8'
-
 services:
-  reverse-proxy:
-    image: nginx:stable-alpine
+  influxdb:
+    image: influxdb:2.7
+    environment:
+      - INFLUXDB_UI_AUTH_DISABLED=false
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=adminpass
     ports:
-      - 80:80
+      - '8086:8086'
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - frontend
-      - backend
-      - prometheus
-      - grafana
-    networks:
-      - monitoring
-
-  prometheus:
-    image: prom/prometheus:latest
-    command: ["--config.file=/etc/prometheus/prometheus.yml", "--web.route-prefix=/prometheus", "--web.external-url=/prometheus"]
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./prometheus/rules:/etc/prometheus/rules
-    ports:
-      - 9090:9090
-    networks:
-      - monitoring
-
-  alertmanager:
-    image: prom/alertmanager:latest
-    volumes:
-      - ./alertmanager/config.yml:/etc/alertmanager/config.yml:ro
-    command: ["--config.file=/etc/alertmanager/config.yml"]
-    ports:
-      - 9093:9093
-    networks:
-      - monitoring
-
+      - influx-data:/var/lib/influxdb2
   grafana:
-    image: grafana/grafana:latest
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_SERVER_ROOT_URL=http://localhost/grafana
-      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    image: grafana/grafana:10.0
     ports:
-      - 3000:3000
+      - '3000:3000'
     depends_on:
-      - prometheus
-    volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning
-      - ./grafana/dashboards:/var/lib/grafana/dashboards
-      - grafana-storage:/var/lib/grafana
-    networks:
-      - monitoring
-
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: monitor
-      POSTGRES_PASSWORD: monitorpass
-      POSTGRES_DB: monitor
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+      - influxdb
+  collector:
+    build: ./collector
     ports:
-      - 5432:5432
-    networks:
-      - monitoring
-
-  backend:
-    build: ./backend
+      - '8000:8000'
     environment:
-      - DATABASE_URL=postgresql://monitor:monitorpass@postgres:5432/monitor
-      - HOST=0.0.0.0
-      - PORT=8000
-    ports:
-      - 8000:8000
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_TOKEN=change-me
+      - PROBE_API_KEY=default-probe-key
+      - NOTIFICATION_SERVICE_URL=http://node-notifier:4000/alert
     depends_on:
-      - postgres
-    networks:
-      - monitoring
-
-  frontend:
-    build: ./frontend
+      - influxdb
+      - node-notifier
+  node-notifier:
+    build: ./nodejs/notification
     ports:
-      - 8080:80
-    depends_on:
-      - backend
-    networks:
-      - monitoring
-
-  ping_exporter:
-    build: ./exporters/ping_exporter
+      - '4000:4000'
     environment:
-      - TARGETS=8.8.8.8,1.1.1.1
-    cap_add:
-      - NET_RAW
-    ports:
-      - 9115:9115
-    networks:
-      - monitoring
-
-  node_exporter:
-    image: prom/node-exporter:latest
-    ports:
-      - 9100:9100
-    networks:
-      - monitoring
-
+      - SMTP_HOST=
+      - SMTP_PORT=
+      - SMTP_USER=
+      - SMTP_PASS=
+      - ALERT_EMAILS=
+      - TWILIO_SID=
+      - TWILIO_TOKEN=
+      - TWILIO_FROM=
+      - ALERT_SMS_TO=
 volumes:
-  pgdata:
-  grafana-storage:
-
-networks:
-  monitoring:
-    driver: bridge
+  influx-data:

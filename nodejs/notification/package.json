@@ -1,0 +1,13 @@
+{
+  "name": "node-notifier",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "express": "^4.18.2",
+    "body-parser": "^1.20.2",
+    "ws": "^8.13.0",
+    "nodemailer": "^6.9.3",
+    "twilio": "^4.4.0",
+    "dotenv": "^16.3.1"
+  }
+}
